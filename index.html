@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitFinder — Smart Repo Discovery</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Inter',-apple-system,sans-serif;
+    background:#0a0a0f;
+    color:#e4e4e7;
+    min-height:100vh;
+    overflow-x:hidden
+  }
+  ::-webkit-scrollbar{width:6px}
+  ::-webkit-scrollbar-track{background:#0a0a0f}
+  ::-webkit-scrollbar-thumb{background:#27272a;border-radius:3px}
+  ::-webkit-scrollbar-thumb:hover{background:#3f3f46}
+
+  .bg-grid{
+    position:fixed;inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);
+    background-size:60px 60px;
+    pointer-events:none;z-index:0
+  }
+  .bg-glow{
+    position:fixed;top:-20vh;right:-10vw;width:60vw;height:60vw;
+    background:radial-gradient(circle,rgba(56,189,248,.08),transparent 70%);
+    pointer-events:none;z-index:0
+  }
+  .bg-glow-2{
+    position:fixed;bottom:-20vh;left:-10vw;width:50vw;height:50vw;
+    background:radial-gradient(circle,rgba(168,85,247,.06),transparent 70%);
+    pointer-events:none;z-index:0
+  }
+
+  .container{max-width:1100px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+
+  header{
+    padding:32px 0 16px;
+    display:flex;align-items:center;justify-content:space-between
+  }
+  .logo{
+    font-size:22px;font-weight:800;
+    background:linear-gradient(135deg,#38bdf8,#a78bfa);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    letter-spacing:-.5px
+  }
+  .logo span{color:#71717a;font-weight:400;background:none;-webkit-text-fill-color:initial}
+  .subtitle{font-size:13px;color:#71717a;margin-top:2px}
+
+  .hero{text-align:center;padding:60px 0 40px}
+  .hero h1{
+    font-size:44px;font-weight:800;letter-spacing:-1.5px;line-height:1.15;
+    background:linear-gradient(135deg,#f4f4f5 30%,#a1a1aa);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent
+  }
+  .hero p{color:#71717a;font-size:16px;margin-top:12px;max-width:520px;margin-left:auto;margin-right:auto}
+
+  .search-box{
+    max-width:640px;margin:32px auto 0;
+    display:flex;gap:0;
+    background:#18181b;border:1px solid #27272a;
+    border-radius:16px;padding:6px;
+    transition:border-color .2s,box-shadow .2s
+  }
+  .search-box:focus-within{
+    border-color:#38bdf8;
+    box-shadow:0 0 0 3px rgba(56,189,248,.15)
+  }
+  .search-box input{
+    flex:1;background:none;border:none;outline:none;
+    padding:10px 16px;font-size:15px;color:#e4e4e7;font-family:inherit
+  }
+  .search-box input::placeholder{color:#52525b}
+  .search-box button{
+    padding:10px 24px;border:none;border-radius:12px;
+    background:linear-gradient(135deg,#38bdf8,#818cf8);
+    color:#fff;font-weight:600;font-size:14px;font-family:inherit;
+    cursor:pointer;transition:opacity .2s,transform .1s;white-space:nowrap
+  }
+  .search-box button:hover{opacity:.9}
+  .search-box button:active{transform:scale(.97)}
+  .search-box button:disabled{opacity:.4;cursor:not-allowed}
+
+  .filters{
+    display:flex;flex-wrap:wrap;gap:8px;
+    justify-content:center;margin-top:16px
+  }
+  .filter-btn{
+    padding:6px 14px;border-radius:20px;border:1px solid #27272a;
+    background:transparent;color:#a1a1aa;font-size:12px;font-family:inherit;
+    cursor:pointer;transition:all .2s;font-weight:500
+  }
+  .filter-btn:hover{border-color:#3f3f46;color:#e4e4e7}
+  .filter-btn.active{
+    background:rgba(56,189,248,.12);border-color:#38bdf8;color:#7dd3fc
+  }
+
+  .status{text-align:center;padding:24px 0;color:#71717a;font-size:14px;min-height:60px}
+  .status .spinner{display:inline-block;width:20px;height:20px;border:2px solid #27272a;border-top-color:#38bdf8;border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .status .error{color:#f87171}
+  .status .rate{color:#fbbf24;font-size:12px;margin-top:6px}
+
+  .results{display:none;padding-bottom:60px}
+  .results.show{display:block}
+
+  .primary-card{
+    background:linear-gradient(135deg,rgba(56,189,248,.06),rgba(168,85,247,.04));
+    border:1px solid rgba(56,189,248,.15);
+    border-radius:20px;padding:28px 32px;margin-bottom:32px;
+    position:relative;overflow:hidden
+  }
+  .primary-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,#38bdf8,#a78bfa,#38bdf8);
+    background-size:200% 100%;animation:shimmer 3s ease-in-out infinite
+  }
+  @keyframes shimmer{0%,100%{background-position:0 0}50%{background-position:100% 0}}
+  .primary-card .label{
+    font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;
+    color:#38bdf8;margin-bottom:8px
+  }
+  .primary-card h2{font-size:26px;font-weight:700;margin-bottom:4px}
+  .primary-card .desc{color:#a1a1aa;font-size:14px;line-height:1.6;margin-top:8px}
+  .primary-card .meta{
+    display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font-size:13px
+  }
+  .primary-card .meta span{color:#71717a;display:flex;align-items:center;gap:4px}
+  .primary-card .meta .val{color:#e4e4e7;font-weight:500}
+  .primary-card .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .primary-card .tags span{
+    padding:3px 10px;border-radius:12px;background:rgba(56,189,248,.1);
+    color:#7dd3fc;font-size:11px;font-weight:500
+  }
+  .primary-card .gh-link{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-top:14px;padding:8px 18px;border-radius:10px;
+    background:#18181b;border:1px solid #27272a;
+    color:#e4e4e7;font-size:13px;font-weight:500;font-family:inherit;
+    cursor:pointer;text-decoration:none;transition:all .2s
+  }
+  .primary-card .gh-link:hover{background:#27272a;border-color:#3f3f46}
+
+  .section-title{
+    font-size:18px;font-weight:700;margin-bottom:16px;
+    display:flex;align-items:center;gap:8px
+  }
+  .section-title .count{
+    font-size:13px;font-weight:500;color:#71717a;
+    background:#18181b;padding:2px 10px;border-radius:10px
+  }
+
+  .similar-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px
+  }
+  .sim-card{
+    background:#18181b;border:1px solid #27272a;
+    border-radius:16px;padding:20px;
+    transition:all .2s;cursor:pointer;position:relative;overflow:hidden
+  }
+  .sim-card:hover{border-color:#3f3f46;transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.3)}
+  .sim-card .sim-badge{
+    position:absolute;top:12px;right:12px;
+    background:linear-gradient(135deg,rgba(56,189,248,.15),rgba(168,85,247,.1));
+    color:#7dd3fc;font-size:11px;font-weight:600;
+    padding:3px 10px;border-radius:8px;border:1px solid rgba(56,189,248,.15)
+  }
+  .sim-card h3{
+    font-size:16px;font-weight:600;margin-bottom:4px;
+    padding-right:50px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+  }
+  .sim-card .author{
+    font-size:12px;color:#52525b;margin-bottom:8px
+  }
+  .sim-card .sim-desc{
+    font-size:13px;color:#a1a1aa;line-height:1.5;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    margin-bottom:10px
+  }
+  .sim-card .sim-meta{
+    display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#52525b
+  }
+  .sim-card .sim-meta .lang{color:#818cf8}
+  .sim-card .sim-tags{
+    display:flex;flex-wrap:wrap;gap:4px;margin-top:8px
+  }
+  .sim-card .sim-tags span{
+    font-size:10px;padding:2px 8px;border-radius:8px;
+    background:rgba(56,189,248,.06);color:#38bdf8
+  }
+  .sim-card .readme-hint{
+    margin-top:10px;padding:8px 10px;background:#0a0a0f;
+    border-radius:8px;font-size:12px;color:#71717a;
+    border-left:2px solid #27272a;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden
+  }
+
+  .empty-state{
+    text-align:center;padding:60px 20px
+  }
+  .empty-state .icon{font-size:48px;margin-bottom:12px;opacity:.3}
+  .empty-state h3{font-size:18px;font-weight:600;color:#a1a1aa}
+  .empty-state p{color:#52525b;font-size:14px;margin-top:6px;max-width:360px;margin-left:auto;margin-right:auto}
+
+  footer{
+    text-align:center;padding:32px 0;color:#52525b;font-size:13px;
+    border-top:1px solid #18181b;margin-top:40px
+  }
+  footer a{color:#71717a;text-decoration:none}
+  footer a:hover{color:#a1a1aa}
+
+  @media(max-width:600px){
+    .hero h1{font-size:28px}
+    .search-box{flex-direction:column;gap:8px}
+    .search-box button{width:100%}
+    .primary-card{padding:20px}
+    .similar-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+<div class="bg-glow-2"></div>
+
+<div class="container">
+
+<header>
+  <div>
+    <div class="logo">GitFinder <span>↗</span></div>
+    <div class="subtitle">intelligent repo discovery</div>
+  </div>
+</header>
+
+<section class="hero">
+  <h1>Find the repo that<br/>matches your vibe</h1>
+  <p>Search any topic &mdash; we&rsquo;ll find the best GitHub repos and surface the one most similar to it.</p>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="e.g. machine learning blog, react component library, rust game engine..." autofocus>
+    <button id="searchBtn">Discover</button>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" data-sort="stars">Most Stars</button>
+    <button class="filter-btn" data-sort="updated">Recently Updated</button>
+    <button class="filter-btn" data-sort="forks">Most Forks</button>
+    <button class="filter-btn" data-sort="best-match">Best Match</button>
+  </div>
+</section>
+
+<div id="status" class="status">Enter a query above to discover repos ✨</div>
+
+<section id="results" class="results">
+  <div id="primarySection"></div>
+  <div id="similarSection"></div>
+</section>
+
+<footer>
+  Powered by <a href="https://docs.github.com/en/rest" target="_blank">GitHub API</a>
+</footer>
+
+</div>
+
+<script>
+const GITHUB_API = 'https://api.github.com';
+let allRepos = [];
+let searchQuery = '';
+let currentSort = 'stars';
+
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+// ---- UTILITIES ----
+function tokenize(text) {
+  return (text || '').toLowerCase()
+    .replace(/[^a-z0-9\s#]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !/^(the|and|for|are|but|not|you|all|can|had|her|was|one|our|out|has|have|been|some|its|just|also|very|with|from|that|this|than|about|into|over|after|what|which|their|your|will|would|could|should|does|done|how|like|make|more|much|such|than|them|then|they|only|other|new|now|use|used|using|way|well|back|based|being|both|each|many|said|same|still|too|under|very|was|were|when|where|while|might|may|more|most|must|here|there)$/i.test(w));
+}
+
+function computeSimilarity(textA, textB) {
+  const tokensA = tokenize(textA);
+  const tokensB = tokenize(textB);
+  if (!tokensA.length || !tokensB.length) return 0;
+
+  const freqA = {}; tokensA.forEach(t => freqA[t] = (freqA[t] || 0) + 1);
+  const freqB = {}; tokensB.forEach(t => freqB[t] = (freqB[t] || 0) + 1);
+
+  let dot = 0, magA = 0, magB = 0;
+  const all = new Set([...Object.keys(freqA), ...Object.keys(freqB)]);
+  for (const t of all) {
+    const a = freqA[t] || 0;
+    const b = freqB[t] || 0;
+    dot += a * b;
+    magA += a * a;
+    magB += b * b;
+  }
+  const mag = Math.sqrt(magA) * Math.sqrt(magB);
+  return mag === 0 ? 0 : dot / mag;
+}
+
+function similarityText(a, b) {
+  const descSim = computeSimilarity(a.description || '', b.description || '') * 0.40;
+  const nameSim = computeSimilarity(a.full_name || '', b.full_name || '') * 0.15;
+  const topicSim = computeSimilarity((a.topics || []).join(' '), (b.topics || []).join(' ')) * 0.35;
+  const langSim = (a.language && b.language && a.language === b.language) ? 0.10 : 0;
+  return descSim + nameSim + topicSim + langSim;
+}
+
+function relativeTime(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  const months = Math.floor(days / 30);
+  return months + 'mo ago';
+}
+
+function formatNum(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n;
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ---- STATE ----
+function setLoading(msg) {
+  $('#status').innerHTML = `<span class="spinner"></span> ${msg}`;
+}
+function setStatus(msg, isError) {
+  $('#status').innerHTML = isError
+    ? `<span class="error">⚠ ${msg}</span>`
+    : msg;
+}
+function setRateLimit(resetTime) {
+  const diff = Math.max(0, Math.floor((resetTime - Date.now()) / 1000));
+  const mins = Math.floor(diff / 60);
+  const secs = diff % 60;
+  const el = document.createElement('div');
+  el.className = 'rate';
+  el.textContent = `Rate limit resets in ${mins}m ${secs}s`;
+  $('#status').appendChild(el);
+}
+
+// ---- GITHUB API ----
+async function fetchRepos(query, sort = 'stars', page = 1) {
+  const params = new URLSearchParams({
+    q: query,
+    sort: sort === 'best-match' ? '' : sort,
+    order: 'desc',
+    per_page: 30,
+    page
+  });
+  if (sort === 'best-match') params.delete('sort');
+  const url = `${GITHUB_API}/search/repositories?${params}`;
+  const res = await fetch(url, {
+    headers: { 'Accept': 'application/vnd.github.v3+json' }
+  });
+
+  if (res.status === 403) {
+    const reset = new Date(res.headers.get('X-RateLimit-Reset') * 1000);
+    throw { rateLimit: true, reset };
+  }
+  if (!res.ok) throw { status: res.status };
+
+  const data = await res.json();
+  return data.items || [];
+}
+
+async function fetchReadme(owner, repo) {
+  try {
+    const url = `${GITHUB_API}/repos/${owner}/${repo}/readme`;
+    const res = await fetch(url, {
+      headers: { 'Accept': 'application/vnd.github.v3.raw' }
+    });
+    if (!res.ok) return '';
+    const text = await res.text();
+    return text.slice(0, 2000);
+  } catch { return ''; }
+}
+
+// ---- RENDER ----
+function renderPrimary(repo, readmeSnippet) {
+  const tags = (repo.topics || []).slice(0, 8).map(t => `<span>${escHtml(t)}</span>`).join('');
+  const description = repo.description || 'No description provided';
+
+  const readmeHtml = readmeSnippet
+    ? `<div class="readme-hint">${escHtml(readmeSnippet.slice(0, 300))}${readmeSnippet.length > 300 ? '…' : ''}</div>`
+    : '';
+
+  $('#primarySection').innerHTML = `
+    <div class="primary-card">
+      <div class="label">✨ Best Match</div>
+      <h2>${escHtml(repo.full_name)}</h2>
+      <div class="desc">${escHtml(description)}</div>
+      <div class="tags">${tags}</div>
+      <div class="meta">
+        <span>★ <span class="val">${formatNum(repo.stargazers_count)}</span></span>
+        <span>⑂ <span class="val">${formatNum(repo.forks_count)}</span></span>
+        ${repo.language ? `<span>🔵 <span class="val">${escHtml(repo.language)}</span></span>` : ''}
+        <span>🕐 <span class="val">${relativeTime(repo.updated_at)}</span></span>
+        <span>📦 <span class="val">${formatNum(repo.size)} KB</span></span>
+      </div>
+      ${readmeHtml}
+      <a class="gh-link" href="${repo.html_url}" target="_blank" rel="noopener">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        View on GitHub
+      </a>
+    </div>`;
+}
+
+function renderSimilar(repos, query) {
+  const container = $('#similarSection');
+  if (!repos.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><h3>No similar repos found</h3><p>Try a broader search term</p></div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="section-title">
+      📡 Similar Repositories
+      <span class="count">${repos.length}</span>
+    </div>
+    <div class="similar-grid">
+      ${repos.map((r, i) => {
+        const tags = (r.topics || []).slice(0, 5).map(t => `<span>${escHtml(t)}</span>`).join('');
+        const desc = r.description || 'No description';
+        return `
+          <div class="sim-card" onclick="window.open('${r.html_url}','_blank')">
+            <div class="sim-badge">${(r._similarity * 100).toFixed(0)}% match</div>
+            <h3>${escHtml(r.full_name)}</h3>
+            <div class="author">${escHtml(r.owner ? r.owner.login : '')}</div>
+            <div class="sim-desc">${escHtml(desc)}</div>
+            <div class="sim-tags">${tags}</div>
+            <div class="sim-meta">
+              <span>★ ${formatNum(r.stargazers_count)}</span>
+              <span>⑂ ${formatNum(r.forks_count)}</span>
+              ${r.language ? `<span class="lang">${escHtml(r.language)}</span>` : ''}
+              <span>${relativeTime(r.updated_at)}</span>
+            </div>
+            ${r._readmeSnippet ? `<div class="readme-hint">${escHtml(r._readmeSnippet.slice(0, 150))}${r._readmeSnippet.length > 150 ? '…' : ''}</div>` : ''}
+          </div>
+        `;
+      }).join('')}
+    </div>`;
+}
+
+// ---- MAIN SEARCH ----
+async function performSearch(query, sort) {
+  searchQuery = query.trim();
+  if (!searchQuery) return;
+
+  const resultsEl = $('#results');
+  resultsEl.classList.remove('show');
+
+  setLoading(`Searching "${escHtml(searchQuery)}"...`);
+  allRepos = [];
+
+  try {
+    const repos = await fetchRepos(searchQuery, sort);
+
+    if (!repos.length) {
+      setStatus('No repos found. Try a different query.');
+      return;
+    }
+
+    setLoading('Analyzing similarities...');
+    setStatus(`Found ${repos.length} repos. Computing text similarity…`);
+
+    // Fetch READMEs for top results
+    const topN = repos.slice(0, 10);
+    const readmes = await Promise.all(
+      topN.map(r => fetchReadme(r.owner.login, r.name))
+    );
+
+    // Build search corpus for similarity
+    const queryTokens = [searchQuery, ...searchQuery.split(/[\s,]+/)]
+      .filter(Boolean)
+      .join(' ');
+
+    repos.forEach((r, i) => {
+      const readmeText = i < topN.length ? (readmes[i] || '') : '';
+      const corpus = [
+        r.description || '',
+        (r.topics || []).join(' '),
+        r.name || '',
+        r.language || '',
+        readmeText
+      ].join(' ');
+      r._similarity = computeSimilarity(queryTokens, corpus);
+      r._readmeSnippet = readmeText;
+    });
+
+    repos.sort((a, b) => b._similarity - a._similarity);
+
+    const best = repos[0];
+    const similar = repos.slice(1, 13);
+
+    if (best._readmeSnippet === undefined) {
+      const readme = await fetchReadme(best.owner.login, best.name);
+      best._readmeSnippet = readme;
+    }
+
+    renderPrimary(best, best._readmeSnippet);
+    renderSimilar(similar, searchQuery);
+
+    resultsEl.classList.add('show');
+    setStatus(`Found ${repos.length} repos • Best match: "${best.full_name}"`);
+
+  } catch (err) {
+    if (err.rateLimit) {
+      setStatus('GitHub API rate limit reached.', true);
+      setRateLimit(err.reset);
+    } else {
+      setStatus(`Error: ${err.status ? 'HTTP ' + err.status : err.message}`, true);
+    }
+  }
+}
+
+// ---- EVENT BINDING ----
+$('#searchBtn').addEventListener('click', () => {
+  performSearch($('#searchInput').value, currentSort);
+});
+
+$('#searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    performSearch($('#searchInput').value, currentSort);
+  }
+});
+
+$$('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSort = btn.dataset.sort;
+    if (searchQuery) {
+      performSearch(searchQuery, currentSort);
+    }
+  });
+});
+
+// Load example on initial
+setTimeout(() => {
+  const examples = [
+    'machine learning framework',
+    'react component library',
+    'rust game engine',
+    'python data visualization',
+    'javascript state management',
+    'go web framework',
+    'typescript cli tool',
+    'tailwindcss ui kit'
+  ];
+  const pick = examples[Math.floor(Math.random() * examples.length)];
+  $('#searchInput').placeholder = `e.g. ${pick}`;
+}, 2000);
+</script>
+</body>
+</html>
